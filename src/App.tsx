@@ -5,6 +5,7 @@ import './App.css'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from './utils/supabase'
 import Admin from './Admin'
+import UserDashboard from './UserDashboard'
 type Property = {
   id: string | number
   title: string
@@ -146,6 +147,15 @@ function App() {
         setDatabaseProperties(mapped)
       }
     }
+    useEffect(() => {
+  if (window.location.search.includes('list=1')) {
+    if (user) {
+      setShowListingForm(true)
+    } else {
+      setShowAuthForm(true)
+    }
+  }
+}, [user])
     loadProperties()
     return () => { mounted = false; listener.subscription.unsubscribe() }
   }, [])
@@ -276,6 +286,10 @@ function App() {
 
 if (window.location.pathname.startsWith('/admin')) {
   return <Admin />
+}
+
+if (window.location.pathname.startsWith('/dashboard')) {
+  return <UserDashboard />
 }
 
 return (
