@@ -132,22 +132,51 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    let mounted = true
-    supabase.auth.getSession().then(({ data }) => { if (mounted) setUser(data.session?.user ?? null) })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
-    const loadProperties = async () => {
-      const { data, error } = await supabase.from('properties').select('*').eq('status', 'approved').order('created_at', { ascending: false })
-      if (!error && data && mounted) {
-        const mapped: Property[] = data.map((item: any) => ({
-          id: item.id, title: item.title, location: item.location, city: item.location.split(',').pop()?.trim() || item.location,
-          type: item.property_type, purpose: item.listing_type === 'buy' ? 'Buy' : 'Rent', price: Number(item.price),
-          beds: item.bedrooms || 0, baths: item.bathrooms || 0, area: item.area ? String(item.area) : 'Area not specified',
-          image: item.images?.[0] || '',
-        }))
-        setDatabaseProperties(mapped)
-      }
+  let mounted = true
+
+  supabase.auth.getSession().then(({ data }) => {
+    if (mounted) setUser(data.session?.user ?? null)
+  })
+
+  const { data: listener } = supabase.auth.onAuthStateChange(
+    (_event, session) => setUser(session?.user ?? null)
+  )
+
+  const loadProperties = async () => {
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+
+    if (!error && data && mounted) {
+      const mapped: Property[] = data.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        location: item.location,
+        city: item.location.split(',').pop()?.trim() || item.location,
+        type: item.property_type,
+        purpose: item.listing_type === 'buy' ? 'Buy' : 'Rent',
+        price: Number(item.price),
+        beds: item.bedrooms || 0,
+        baths: item.bathrooms || 0,
+        area: item.area ? String(item.area) : 'Area not specified',
+        image: item.images?.[0] || '',
+      }))
+
+      setDatabaseProperties(mapped)
     }
-    useEffect(() => {
+  }
+
+  loadProperties()
+
+  return () => {
+    mounted = false
+    listener.subscription.unsubscribe()
+  }
+}, [])
+
+useEffect(() => {
   if (window.location.search.includes('list=1')) {
     if (user) {
       setShowListingForm(true)
@@ -156,9 +185,6 @@ function App() {
     }
   }
 }, [user])
-    loadProperties()
-    return () => { mounted = false; listener.subscription.unsubscribe() }
-  }, [])
 
   const allProperties = [...sampleProperties, ...databaseProperties]
 
