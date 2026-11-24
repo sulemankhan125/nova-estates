@@ -2,9 +2,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
-import { supabase } from './utils/supabase'
 import type { User } from '@supabase/supabase-js'
-
+import { supabase } from './utils/supabase'
+import Admin from './Admin'
 type Property = {
   id: string | number
   title: string
@@ -274,18 +274,22 @@ function App() {
     }
   }
 
-  return (
-    <div className="website">
-      <div className="topbar">
-        <div className="container topbar-inner">
-          <span>Discover properties. Find your place.</span>
-          <div>
-            <a href="mailto:info@novaestates.com">info@novaestates.com</a>
-            <span className="top-divider">|</span>
-            <span>Pakistan</span>
-          </div>
+if (window.location.pathname.startsWith('/admin')) {
+  return <Admin />
+}
+
+return (
+  <div className="website">
+    <div className="topbar">
+      <div className="container topbar-inner">
+        <span>Discover properties. Find your place.</span>
+        <div>
+          <a href="mailto:info@novaestates.com">info@novaestates.com</a>
+          <span className="top-divider">|</span>
+          <span>Pakistan</span>
         </div>
       </div>
+    </div>
 
       <header className="navbar">
         <div className="container nav-inner">
