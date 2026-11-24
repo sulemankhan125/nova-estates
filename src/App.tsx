@@ -1,10 +1,12 @@
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
+import { supabase } from './utils/supabase'
+import type { User } from '@supabase/supabase-js'
 
 type Property = {
-  id: number
+  id: string | number
   title: string
   location: string
   city: string
@@ -18,7 +20,7 @@ type Property = {
   featured?: boolean
 }
 
-const properties: Property[] = [
+const sampleProperties: Property[] = [
   {
     id: 1,
     title: 'Contemporary Family Villa',
@@ -109,18 +111,49 @@ const formatPrice = (price: number) => {
 
 function App() {
   const [purpose, setPurpose] = useState<'Buy' | 'Rent'>('Buy')
+  const [databaseProperties, setDatabaseProperties] = useState<Property[]>([])
+  const [user, setUser] = useState<User | null>(null)
+  const [showListingForm, setShowListingForm] = useState(false)
+  const [showAuthForm, setShowAuthForm] = useState(false)
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup')
+  const [listingStatus, setListingStatus] = useState('')
+  const [authStatus, setAuthStatus] = useState('')
+  const [isListing, setIsListing] = useState(false)
+  const [isAuthLoading, setIsAuthLoading] = useState(false)
   const [city, setCity] = useState('All Cities')
   const [propertyType, setPropertyType] = useState('All Types')
   const [keyword, setKeyword] = useState('')
   const [maxPrice, setMaxPrice] = useState('Any Price')
-  const [favorites, setFavorites] = useState<number[]>([])
+  const [favorites, setFavorites] = useState<(number | string)[]>([])
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)
   const [mobileMenu, setMobileMenu] = useState(false)
   const [formStatus, setFormStatus] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  useEffect(() => {
+    let mounted = true
+    supabase.auth.getSession().then(({ data }) => { if (mounted) setUser(data.session?.user ?? null) })
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
+    const loadProperties = async () => {
+      const { data, error } = await supabase.from('properties').select('*').eq('status', 'approved').order('created_at', { ascending: false })
+      if (!error && data && mounted) {
+        const mapped: Property[] = data.map((item: any) => ({
+          id: item.id, title: item.title, location: item.location, city: item.location.split(',').pop()?.trim() || item.location,
+          type: item.property_type, purpose: item.listing_type === 'buy' ? 'Buy' : 'Rent', price: Number(item.price),
+          beds: item.bedrooms || 0, baths: item.bathrooms || 0, area: item.area ? String(item.area) : 'Area not specified',
+          image: item.images?.[0] || '',
+        }))
+        setDatabaseProperties(mapped)
+      }
+    }
+    loadProperties()
+    return () => { mounted = false; listener.subscription.unsubscribe() }
+  }, [])
+
+  const allProperties = [...sampleProperties, ...databaseProperties]
+
   const filteredProperties = useMemo(() => {
-    return properties.filter((property) => {
+    return allProperties.filter((property) => {
       const matchesPurpose = property.purpose === purpose
       const matchesCity = city === 'All Cities' || property.city === city
       const matchesType = propertyType === 'All Types' || property.type === propertyType
@@ -135,14 +168,78 @@ function App() {
 
       return matchesPurpose && matchesCity && matchesType && matchesKeyword && matchesPrice
     })
-  }, [purpose, city, propertyType, keyword, maxPrice])
+  }, [purpose, city, propertyType, keyword, maxPrice, databaseProperties])
 
-  const toggleFavorite = (id: number) => {
+  const toggleFavorite = (id: string | number) => {
     setFavorites((current) =>
       current.includes(id)
         ? current.filter((item) => item !== id)
         : [...current, id],
     )
+  }
+
+  const handleAuth = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setIsAuthLoading(true)
+    setAuthStatus('')
+    const formData = new FormData(event.currentTarget)
+    const email = String(formData.get('email') || '')
+    const password = String(formData.get('password') || '')
+    const name = String(formData.get('name') || '')
+    const result = authMode === 'signup'
+      ? await supabase.auth.signUp({ email, password, options: { data: { full_name: name } } })
+      : await supabase.auth.signInWithPassword({ email, password })
+    setIsAuthLoading(false)
+    if (result.error) { setAuthStatus(result.error.message); return }
+    if (authMode === 'signup' && !result.data.session) {
+      setAuthStatus('Account created. Please check your email to confirm your account, then log in.')
+    } else {
+      setAuthStatus('Successfully signed in.')
+      setShowAuthForm(false)
+      setShowListingForm(true)
+    }
+  }
+
+  const handleListing = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!user) { setShowListingForm(false); setShowAuthForm(true); return }
+    setIsListing(true)
+    setListingStatus('')
+    const form = event.currentTarget
+    const data = new FormData(form)
+    const files = data.getAll('images').filter((file): file is File => file instanceof File && file.size > 0)
+    const imageUrls: string[] = []
+    try {
+      for (const file of files) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '-')
+        const filePath = `${user.id}/${crypto.randomUUID()}-${safeName}`
+        const { error: uploadError } = await supabase.storage.from('property-images').upload(filePath, file, { upsert: false })
+        if (uploadError) throw uploadError
+        const { data: publicData } = supabase.storage.from('property-images').getPublicUrl(filePath)
+        imageUrls.push(publicData.publicUrl)
+      }
+      const { error } = await supabase.from('properties').insert({
+        owner_id: user.id,
+        title: String(data.get('title') || ''),
+        description: String(data.get('description') || ''),
+        property_type: String(data.get('property_type') || 'House'),
+        listing_type: String(data.get('listing_type') || 'buy'),
+        price: Number(data.get('price')),
+        location: String(data.get('location') || ''),
+        bedrooms: Number(data.get('bedrooms') || 0),
+        bathrooms: Number(data.get('bathrooms') || 0),
+        area: Number(data.get('area') || 0) || null,
+        images: imageUrls,
+        status: 'pending',
+      })
+      if (error) throw error
+      setListingStatus('Your property has been submitted for review. It will appear publicly after admin approval.')
+      form.reset()
+    } catch (error) {
+      setListingStatus(error instanceof Error ? error.message : 'Could not submit property. Please try again.')
+    } finally {
+      setIsListing(false)
+    }
   }
 
   const handleContact = async (event: FormEvent<HTMLFormElement>) => {
@@ -216,7 +313,7 @@ function App() {
             <a href="#about" onClick={() => setMobileMenu(false)}>About Us</a>
           </nav>
 
-          <a href="#contact" className="nav-contact">Contact Us <span>↗</span></a>
+          <div className="nav-actions"><button type="button" className="nav-contact" onClick={() => user ? supabase.auth.signOut() : setShowAuthForm(true)}>{user ? "Sign out" : "Login / Sign up"}</button><a href="#contact" className="nav-contact">Contact Us <span>↗</span></a></div>
         </div>
       </header>
 
@@ -317,7 +414,7 @@ function App() {
                 <h2>Spaces worth <em>discovering.</em></h2>
                 <p>Explore properties selected to match different lifestyles and ambitions.</p>
               </div>
-              <a href="#contact" className="text-link">List your property <span>↗</span></a>
+              <button type="button" className="text-link" onClick={() => user ? setShowListingForm(true) : setShowAuthForm(true)}>List your property <span>↗</span></button>
             </div>
 
             <div className="property-toolbar">
@@ -372,7 +469,7 @@ function App() {
               </div>
             )}
 
-            <p className="demo-note">Note: Property listings and prices shown are illustrative sample data for demonstration purposes.</p>
+            <p className="demo-note">Sample listings are for demonstration. Submitted properties appear after admin approval.</p>
           </div>
         </section>
 
@@ -532,6 +629,56 @@ function App() {
           <a href="#home">Back to top ↑</a>
         </div>
       </footer>
+
+      {showAuthForm && (
+        <div className="modal-backdrop" onClick={() => setShowAuthForm(false)}>
+          <div className="property-modal form-modal" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowAuthForm(false)}>×</button>
+            <div className="modal-content">
+              <span className="eyebrow">NOVA ESTATES ACCOUNT</span>
+              <h2>{authMode === 'signup' ? 'Create your account' : 'Welcome back'}</h2>
+              <form className="contact-form" onSubmit={handleAuth}>
+                {authMode === 'signup' && <label>Full name<input name="name" required placeholder="Your full name" /></label>}
+                <label>Email address<input name="email" type="email" required placeholder="you@example.com" /></label>
+                <label>Password<input name="password" type="password" minLength={6} required placeholder="At least 6 characters" /></label>
+                <button className="form-submit" type="submit" disabled={isAuthLoading}>{isAuthLoading ? 'Please wait...' : authMode === 'signup' ? 'Create account' : 'Log in'}</button>
+              </form>
+              {authStatus && <p className="form-status">{authStatus}</p>}
+              <button type="button" className="text-link" onClick={() => { setAuthMode(authMode === 'signup' ? 'login' : 'signup'); setAuthStatus('') }}>{authMode === 'signup' ? 'Already have an account? Log in' : 'New here? Create an account'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showListingForm && (
+        <div className="modal-backdrop" onClick={() => setShowListingForm(false)}>
+          <div className="property-modal form-modal" onClick={(event) => event.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowListingForm(false)}>×</button>
+            <div className="modal-content">
+              <span className="eyebrow">LIST YOUR PROPERTY</span>
+              <h2>Share your property details.</h2>
+              {!user ? <p>Please log in to submit a property.</p> : (
+                <form className="contact-form" onSubmit={handleListing}>
+                  <label>Property title<input name="title" required placeholder="e.g. 5 Marla Family House" /></label>
+                  <label>Listing purpose<select name="listing_type"><option value="buy">For Sale</option><option value="rent">For Rent</option></select></label>
+                  <label>Property type<select name="property_type"><option>House</option><option>Apartment</option><option>Plot</option><option>Commercial</option></select></label>
+                  <label>Price (PKR)<input name="price" type="number" min="1" required placeholder="e.g. 15000000" /></label>
+                  <label>Location<input name="location" required placeholder="Area, City" /></label>
+                  <div className="form-row">
+                    <label>Bedrooms<input name="bedrooms" type="number" min="0" defaultValue="0" /></label>
+                    <label>Bathrooms<input name="bathrooms" type="number" min="0" defaultValue="0" /></label>
+                  </div>
+                  <label>Area (sq ft)<input name="area" type="number" min="0" placeholder="Optional" /></label>
+                  <label>Description<textarea name="description" rows={3} placeholder="Describe your property..." /></label>
+                  <label>Property photos<input name="images" type="file" accept="image/*" multiple required /></label>
+                  <button className="form-submit" type="submit" disabled={isListing}>{isListing ? 'Submitting...' : 'Submit property for review'}</button>
+                </form>
+              )}
+              {listingStatus && <p className="form-status">{listingStatus}</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedProperty && (
         <div className="modal-backdrop" onClick={() => setSelectedProperty(null)}>

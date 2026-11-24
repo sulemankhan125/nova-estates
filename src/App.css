@@ -1192,3 +1192,42 @@ button {
     transition-duration: .01ms !important;
   }
 }
+
+/* NOVA ESTATES - property listing and authentication UI */
+.nav-actions { display:flex; align-items:center; gap:12px; }
+.nav-actions button { border:1px solid #dce7e5; background:#fff; color:#173640; padding:12px 16px; font-size:11px; font-weight:700; }
+.nav-actions button:hover { border-color:#159d92; color:#159d92; }
+.property-modal form { padding:26px; }
+.property-modal form label { display:flex; flex-direction:column; gap:7px; margin-bottom:15px; color:#29454c; font-size:11px; font-weight:700; }
+.property-modal input, .property-modal select, .property-modal textarea { width:100%; min-height:44px; border:1px solid #dce6e4; background:#fff; padding:11px 12px; color:#183a43; outline:none; font-size:12px; }
+.property-modal textarea { min-height:105px; resize:vertical; }
+.property-modal input:focus, .property-modal select:focus, .property-modal textarea:focus { border-color:#159d92; box-shadow:0 0 0 3px rgba(21,157,146,.1); }
+.property-modal input[type="file"] { padding:9px; }
+.property-modal button[type="submit"] { border:0; width:100%; margin-top:8px; }
+.property-modal button:disabled { opacity:.6; cursor:wait; }
+.property-modal .form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.property-modal .form-status, .property-modal .form-message { padding:12px 14px; background:#edf8f5; color:#147c70; font-size:12px; line-height:1.6; margin:12px 0; }
+.property-modal .error, .property-modal .form-error { background:#fff1f0; color:#b42318; }
+.property-modal .modal-content { padding:26px; }
+.property-modal .modal-content form { padding:0; }
+.property-modal .modal-content label { display:flex; flex-direction:column; gap:7px; margin:12px 0; font-size:11px; font-weight:700; color:#29454c; }
+.property-modal .modal-content input, .property-modal .modal-content select, .property-modal .modal-content textarea { width:100%; border:1px solid #dce6e4; padding:11px 12px; min-height:44px; }
+.property-modal .modal-content textarea { min-height:100px; }
+.demo-note { margin:16px 0; padding:12px 14px; background:#f4f7f6; color:#718387; font-size:11px; line-height:1.7; }
+.empty-state { padding:35px 20px; text-align:center; background:#fff; border:1px dashed #cbd9d7; color:#718387; }
+.empty-state h3 { color:#173640; font-family:'Manrope',sans-serif; margin:0 0 8px; }
+.empty-state p { font-size:12px; line-height:1.7; }
+.empty-state button { border:0; background:#123640; color:#fff; padding:12px 18px; font-size:11px; font-weight:700; }
+.property-tag { display:inline-block; }
+.property-card button { cursor:pointer; }
+
+@media (max-width: 900px) {
+  .nav-actions { gap:7px; }
+  .nav-actions button { padding:10px 11px; }
+}
+@media (max-width: 650px) {
+  .nav-actions { width:100%; justify-content:center; padding:10px 0; }
+  .nav-actions button { font-size:10px; }
+  .property-modal .form-row, .property-modal form .form-row { grid-template-columns:1fr; gap:0; }
+  .property-modal > img { height:210px; }
+}
