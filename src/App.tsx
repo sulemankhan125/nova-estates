@@ -357,7 +357,26 @@ return (
             <a href="#about" onClick={() => setMobileMenu(false)}>About Us</a>
           </nav>
 
-          <div className="nav-actions"><button type="button" className="nav-contact" onClick={() => user ? supabase.auth.signOut() : setShowAuthForm(true)}>{user ? "Sign out" : "Login / Sign up"}</button><a href="#contact" className="nav-contact">Contact Us <span>↗</span></a></div>
+<div className="nav-actions">
+  {user && (
+    <a href="/dashboard" className="nav-contact">
+      My Dashboard
+    </a>
+  )}
+
+  <button
+    type="button"
+    className="nav-contact"
+    onClick={() => user ? supabase.auth.signOut() : setShowAuthForm(true)}
+  >
+    {user ? "Sign out" : "Login / Sign up"}
+  </button>
+
+  <a href="#contact" className="nav-contact">
+    Contact Us <span>↗</span>
+  </a>
+</div>
+
         </div>
       </header>
 
